@@ -1,3 +1,60 @@
+.auth-shell {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at top, #2e3345, #171923 60%);
+  color: #ececf1;
+  padding: 1rem;
+}
+
+.auth-card {
+  width: min(420px, 100%);
+  border: 1px solid #3f4254;
+  border-radius: 0.9rem;
+  background: #20222d;
+  padding: 1.2rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.auth-card h1 {
+  margin: 0;
+}
+
+.auth-card p {
+  margin: 0;
+  color: #c5cad6;
+}
+
+.auth-card label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.auth-card input {
+  border: 1px solid #4a4f64;
+  border-radius: 0.55rem;
+  background: #2a2e3e;
+  color: #ececf1;
+  padding: 0.6rem 0.7rem;
+}
+
+.auth-card button[type='submit'] {
+  border: 0;
+  border-radius: 0.6rem;
+  background: #10a37f;
+  color: #052e26;
+  font-weight: 700;
+  padding: 0.65rem;
+  cursor: pointer;
+}
+
+.auth-error {
+  color: #fca5a5;
+  font-size: 0.9rem;
+}
+
 .chat-shell {
   display: grid;
   grid-template-columns: 260px 1fr;
@@ -56,6 +113,8 @@
   padding-top: 0.8rem;
   color: #9ca3af;
   font-size: 0.9rem;
+  display: grid;
+  gap: 0.35rem;
 }
 
 .chat-main {
@@ -164,6 +223,15 @@
 .chat-composer-wrap small {
   text-align: center;
   color: #9ca3af;
+}
+
+.link-button {
+  border: 0;
+  background: transparent;
+  color: #83b7ff;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
 }
 
 @media (max-width: 900px) {

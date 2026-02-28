@@ -1,21 +1,37 @@
 const express = require("express");
-const { eq } = require("drizzle-orm");
+const { and, eq, inArray } = require("drizzle-orm");
 const { db } = require("../db/client");
-const { messages } = require("../db/schema");
+const { messages, chats } = require("../db/schema");
+const { requireAuth } = require("../auth/middleware");
 
 const router = express.Router();
+router.use(requireAuth);
 
 function getId(value) {
   const id = Number.parseInt(value, 10);
   return Number.isNaN(id) ? null : id;
 }
 
+async function hasChatAccess(chatId, userId) {
+  const found = await db
+    .select()
+    .from(chats)
+    .where(and(eq(chats.id, chatId), eq(chats.userId, userId)));
+  return found.length > 0;
+}
+
 router.get("/messages", async (req, res) => {
   try {
-    const data = await db.select().from(messages);
-    res.json(data);
+    const userChats = await db.select({ id: chats.id }).from(chats).where(eq(chats.userId, req.auth.userId));
+    const chatIds = userChats.map((chat) => chat.id);
+    if (chatIds.length === 0) {
+      return res.json([]);
+    }
+
+    const data = await db.select().from(messages).where(inArray(messages.chatId, chatIds));
+    return res.json(data);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch messages" });
+    return res.status(500).json({ error: "Failed to fetch messages" });
   }
 });
 
@@ -30,9 +46,14 @@ router.get("/messages/:id", async (req, res) => {
     if (data.length === 0) {
       return res.status(404).json({ error: "Message not found" });
     }
-    res.json(data[0]);
+    const message = data[0];
+    const canAccess = await hasChatAccess(message.chatId, req.auth.userId);
+    if (!canAccess) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+    return res.json(message);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch message" });
+    return res.status(500).json({ error: "Failed to fetch message" });
   }
 });
 
@@ -43,13 +64,18 @@ router.post("/messages", async (req, res) => {
   }
 
   try {
+    const canAccess = await hasChatAccess(chatId, req.auth.userId);
+    if (!canAccess) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+
     const data = await db
       .insert(messages)
       .values({ chatId, role, content })
       .returning();
-    res.status(201).json(data[0]);
+    return res.status(201).json(data[0]);
   } catch (error) {
-    res.status(500).json({ error: "Failed to create message" });
+    return res.status(500).json({ error: "Failed to create message" });
   }
 });
 
@@ -69,6 +95,23 @@ router.put("/messages/:id", async (req, res) => {
   }
 
   try {
+    const existing = await db.select().from(messages).where(eq(messages.id, id));
+    const existingMessage = existing[0];
+    if (!existingMessage) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    const hasCurrentAccess = await hasChatAccess(existingMessage.chatId, req.auth.userId);
+    if (!hasCurrentAccess) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+    if (update.chatId !== undefined) {
+      const canMoveToChat = await hasChatAccess(update.chatId, req.auth.userId);
+      if (!canMoveToChat) {
+        return res.status(404).json({ error: "Chat not found" });
+      }
+    }
+
     const data = await db
       .update(messages)
       .set(update)
@@ -78,9 +121,9 @@ router.put("/messages/:id", async (req, res) => {
     if (data.length === 0) {
       return res.status(404).json({ error: "Message not found" });
     }
-    res.json(data[0]);
+    return res.json(data[0]);
   } catch (error) {
-    res.status(500).json({ error: "Failed to update message" });
+    return res.status(500).json({ error: "Failed to update message" });
   }
 });
 
@@ -91,6 +134,17 @@ router.delete("/messages/:id", async (req, res) => {
   }
 
   try {
+    const existing = await db.select().from(messages).where(eq(messages.id, id));
+    const existingMessage = existing[0];
+    if (!existingMessage) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    const canAccess = await hasChatAccess(existingMessage.chatId, req.auth.userId);
+    if (!canAccess) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
     const data = await db
       .delete(messages)
       .where(eq(messages.id, id))
@@ -98,9 +152,9 @@ router.delete("/messages/:id", async (req, res) => {
     if (data.length === 0) {
       return res.status(404).json({ error: "Message not found" });
     }
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: "Failed to delete message" });
+    return res.status(500).json({ error: "Failed to delete message" });
   }
 });
 

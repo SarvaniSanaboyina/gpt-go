@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getAuthToken } from './auth'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api'
 
@@ -7,6 +8,14 @@ const client = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+})
+
+client.interceptors.request.use((config) => {
+  const token = getAuthToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
 })
 
 function toError(error) {
@@ -29,8 +38,10 @@ async function request(config) {
 }
 
 export const api = {
+  register: (payload) => request({ method: 'post', url: '/auth/register', data: payload }),
+  login: (payload) => request({ method: 'post', url: '/auth/login', data: payload }),
+  me: () => request({ method: 'get', url: '/auth/me' }),
   getUsers: () => request({ method: 'get', url: '/users' }),
-  createUser: (payload) => request({ method: 'post', url: '/users', data: payload }),
   getChats: () => request({ method: 'get', url: '/chats' }),
   createChat: (payload) => request({ method: 'post', url: '/chats', data: payload }),
   getMessages: () => request({ method: 'get', url: '/messages' }),

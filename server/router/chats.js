@@ -1,9 +1,11 @@
 const express = require("express");
-const { eq } = require("drizzle-orm");
+const { and, eq } = require("drizzle-orm");
 const { db } = require("../db/client");
 const { chats } = require("../db/schema");
+const { requireAuth } = require("../auth/middleware");
 
 const router = express.Router();
+router.use(requireAuth);
 
 function getId(value) {
   const id = Number.parseInt(value, 10);
@@ -12,10 +14,10 @@ function getId(value) {
 
 router.get("/chats", async (req, res) => {
   try {
-    const data = await db.select().from(chats);
-    res.json(data);
+    const data = await db.select().from(chats).where(eq(chats.userId, req.auth.userId));
+    return res.json(data);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch chats" });
+    return res.status(500).json({ error: "Failed to fetch chats" });
   }
 });
 
@@ -26,30 +28,33 @@ router.get("/chats/:id", async (req, res) => {
   }
 
   try {
-    const data = await db.select().from(chats).where(eq(chats.id, id));
+    const data = await db
+      .select()
+      .from(chats)
+      .where(and(eq(chats.id, id), eq(chats.userId, req.auth.userId)));
     if (data.length === 0) {
       return res.status(404).json({ error: "Chat not found" });
     }
-    res.json(data[0]);
+    return res.json(data[0]);
   } catch (error) {
-    res.status(500).json({ error: "Failed to fetch chat" });
+    return res.status(500).json({ error: "Failed to fetch chat" });
   }
 });
 
 router.post("/chats", async (req, res) => {
-  const { userId, title } = req.body;
-  if (!userId || !title) {
-    return res.status(400).json({ error: "userId and title are required" });
+  const { title } = req.body;
+  if (!title) {
+    return res.status(400).json({ error: "title is required" });
   }
 
   try {
     const data = await db
       .insert(chats)
-      .values({ userId, title })
+      .values({ userId: req.auth.userId, title })
       .returning();
-    res.status(201).json(data[0]);
+    return res.status(201).json(data[0]);
   } catch (error) {
-    res.status(500).json({ error: "Failed to create chat" });
+    return res.status(500).json({ error: "Failed to create chat" });
   }
 });
 
@@ -60,7 +65,6 @@ router.put("/chats/:id", async (req, res) => {
   }
 
   const update = {};
-  if (req.body.userId !== undefined) update.userId = req.body.userId;
   if (req.body.title !== undefined) update.title = req.body.title;
 
   if (Object.keys(update).length === 0) {
@@ -71,15 +75,15 @@ router.put("/chats/:id", async (req, res) => {
     const data = await db
       .update(chats)
       .set(update)
-      .where(eq(chats.id, id))
+      .where(and(eq(chats.id, id), eq(chats.userId, req.auth.userId)))
       .returning();
 
     if (data.length === 0) {
       return res.status(404).json({ error: "Chat not found" });
     }
-    res.json(data[0]);
+    return res.json(data[0]);
   } catch (error) {
-    res.status(500).json({ error: "Failed to update chat" });
+    return res.status(500).json({ error: "Failed to update chat" });
   }
 });
 
@@ -90,13 +94,16 @@ router.delete("/chats/:id", async (req, res) => {
   }
 
   try {
-    const data = await db.delete(chats).where(eq(chats.id, id)).returning();
+    const data = await db
+      .delete(chats)
+      .where(and(eq(chats.id, id), eq(chats.userId, req.auth.userId)))
+      .returning();
     if (data.length === 0) {
       return res.status(404).json({ error: "Chat not found" });
     }
-    res.status(204).send();
+    return res.status(204).send();
   } catch (error) {
-    res.status(500).json({ error: "Failed to delete chat" });
+    return res.status(500).json({ error: "Failed to delete chat" });
   }
 });
 

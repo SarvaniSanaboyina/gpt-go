@@ -1,46 +1,52 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../lib/api'
+import { clearAuthToken, getAuthToken, setAuthToken } from '../lib/auth'
 import './ChatPage.css'
 
+const initialAuthState = {
+  name: '',
+  email: '',
+  password: '',
+}
+
 function ChatPage() {
-  const [currentUserId, setCurrentUserId] = useState(null)
+  const [user, setUser] = useState(null)
   const [chats, setChats] = useState([])
   const [messages, setMessages] = useState([])
   const [activeChatId, setActiveChatId] = useState(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [authMode, setAuthMode] = useState('login')
+  const [authForm, setAuthForm] = useState(initialAuthState)
+  const [authLoading, setAuthLoading] = useState(false)
 
   useEffect(() => {
     let isMounted = true
 
     async function bootstrap() {
+      if (!getAuthToken()) {
+        if (isMounted) setLoading(false)
+        return
+      }
+
       try {
         setLoading(true)
         setError('')
 
-        let users = await api.getUsers()
-        if (users.length === 0) {
-          const createdUser = await api.createUser({
-            name: 'Demo User',
-            email: `demo-${Date.now()}@example.com`,
-          })
-          users = [createdUser]
-        }
-
-        const userId = users[0].id
+        const currentUser = await api.me()
         const allChats = await api.getChats()
-        const userChats = allChats.filter((chat) => chat.userId === userId)
         const allMessages = await api.getMessages()
 
         if (!isMounted) return
 
-        setCurrentUserId(userId)
-        setChats(userChats)
+        setUser(currentUser)
+        setChats(allChats)
         setMessages(allMessages)
-        setActiveChatId(userChats[0]?.id ?? null)
+        setActiveChatId(allChats[0]?.id ?? null)
       } catch (err) {
         if (!isMounted) return
+        clearAuthToken()
         setError(err.message || 'Failed to load data')
       } finally {
         if (isMounted) setLoading(false)
@@ -64,6 +70,57 @@ function ChatPage() {
     [messages, activeChatId],
   )
 
+  const handleAuthChange = (event) => {
+    const { name, value } = event.target
+    setAuthForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleAuthSubmit = async (event) => {
+    event.preventDefault()
+
+    try {
+      setAuthLoading(true)
+      setError('')
+
+      const payload = {
+        email: authForm.email.trim(),
+        password: authForm.password,
+      }
+
+      let response
+      if (authMode === 'register') {
+        response = await api.register({ ...payload, name: authForm.name.trim() })
+      } else {
+        response = await api.login(payload)
+      }
+
+      setAuthToken(response.token)
+      setUser(response.user)
+
+      const allChats = await api.getChats()
+      const allMessages = await api.getMessages()
+
+      setChats(allChats)
+      setMessages(allMessages)
+      setActiveChatId(allChats[0]?.id ?? null)
+      setAuthForm(initialAuthState)
+    } catch (err) {
+      setError(err.message || 'Authentication failed')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleLogout = () => {
+    clearAuthToken()
+    setUser(null)
+    setChats([])
+    setMessages([])
+    setActiveChatId(null)
+    setInput('')
+    setError('')
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     const trimmed = input.trim()
@@ -84,12 +141,11 @@ function ChatPage() {
   }
 
   const handleNewChat = async () => {
-    if (!currentUserId) return
+    if (!user) return
 
     try {
       setError('')
       const createdChat = await api.createChat({
-        userId: currentUserId,
         title: `New chat ${chats.length + 1}`,
       })
 
@@ -101,10 +157,71 @@ function ChatPage() {
     }
   }
 
+  if (!user && !loading) {
+    return (
+      <div className="auth-shell">
+        <form className="auth-card" onSubmit={handleAuthSubmit}>
+          <h1>Chat Bot</h1>
+          <p>{authMode === 'register' ? 'Create your account' : 'Sign in to continue'}</p>
+
+          {authMode === 'register' ? (
+            <label>
+              Name
+              <input
+                name="name"
+                type="text"
+                value={authForm.name}
+                onChange={handleAuthChange}
+                required
+              />
+            </label>
+          ) : null}
+
+          <label>
+            Email
+            <input
+              name="email"
+              type="email"
+              value={authForm.email}
+              onChange={handleAuthChange}
+              required
+            />
+          </label>
+
+          <label>
+            Password
+            <input
+              name="password"
+              type="password"
+              value={authForm.password}
+              onChange={handleAuthChange}
+              required
+              minLength={8}
+            />
+          </label>
+
+          <button type="submit" disabled={authLoading}>
+            {authLoading ? 'Please wait...' : authMode === 'register' ? 'Create account' : 'Sign in'}
+          </button>
+
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => setAuthMode((prev) => (prev === 'login' ? 'register' : 'login'))}
+          >
+            {authMode === 'login' ? 'Need an account? Register' : 'Already have an account? Sign in'}
+          </button>
+
+          {error ? <div className="auth-error">{error}</div> : null}
+        </form>
+      </div>
+    )
+  }
+
   return (
     <div className="chat-shell">
       <aside className="chat-sidebar">
-        <button className="new-chat" onClick={handleNewChat} disabled={loading || !currentUserId}>
+        <button className="new-chat" onClick={handleNewChat} disabled={loading || !user}>
           + New chat
         </button>
         <nav className="chat-list" aria-label="Chat history">
@@ -118,7 +235,12 @@ function ChatPage() {
             </button>
           ))}
         </nav>
-        <div className="chat-sidebar-footer">User Workspace</div>
+        <div className="chat-sidebar-footer">
+          <div>{user?.email}</div>
+          <button className="link-button" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
       </aside>
 
       <section className="chat-main" aria-label="Conversation">
@@ -163,7 +285,7 @@ function ChatPage() {
               Send
             </button>
           </form>
-          <small>Connected to Express + Drizzle API.</small>
+          <small>Connected to authenticated Express + Drizzle API.</small>
         </footer>
       </section>
     </div>

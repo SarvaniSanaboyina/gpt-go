@@ -1,6 +1,7 @@
 require("dotenv").config();
 const { db, pool } = require("../db/client");
 const { users, chats, messages } = require("../db/schema");
+const { createPasswordRecord } = require("../auth/crypto");
 
 async function seed() {
   try {
@@ -8,11 +9,24 @@ async function seed() {
     await db.delete(chats);
     await db.delete(users);
 
+    const aliceAuth = createPasswordRecord("Password123!");
+    const bobAuth = createPasswordRecord("Password123!");
+
     const createdUsers = await db
       .insert(users)
       .values([
-        { name: "Alice Johnson", email: "alice@example.com" },
-        { name: "Bob Miller", email: "bob@example.com" },
+        {
+          name: "Alice Johnson",
+          email: "alice@example.com",
+          passwordHash: aliceAuth.passwordHash,
+          passwordSalt: aliceAuth.passwordSalt,
+        },
+        {
+          name: "Bob Miller",
+          email: "bob@example.com",
+          passwordHash: bobAuth.passwordHash,
+          passwordSalt: bobAuth.passwordSalt,
+        },
       ])
       .returning();
 
