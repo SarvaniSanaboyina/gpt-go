@@ -1,15 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
-import { clearAuthToken, getAuthToken, setAuthToken } from '../lib/auth'
+import { clearAuthToken, getAuthToken } from '../lib/auth'
 import './ChatPage.css'
 
-const initialAuthState = {
-  name: '',
-  email: '',
-  password: '',
-}
-
 function ChatPage() {
+  const navigate = useNavigate()
   const [user, setUser] = useState(null)
   const [chats, setChats] = useState([])
   const [messages, setMessages] = useState([])
@@ -17,16 +13,13 @@ function ChatPage() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [authMode, setAuthMode] = useState('login')
-  const [authForm, setAuthForm] = useState(initialAuthState)
-  const [authLoading, setAuthLoading] = useState(false)
 
   useEffect(() => {
     let isMounted = true
 
     async function bootstrap() {
       if (!getAuthToken()) {
-        if (isMounted) setLoading(false)
+        navigate('/login', { replace: true })
         return
       }
 
@@ -47,7 +40,7 @@ function ChatPage() {
       } catch (err) {
         if (!isMounted) return
         clearAuthToken()
-        setError(err.message || 'Failed to load data')
+        navigate('/login', { replace: true })
       } finally {
         if (isMounted) setLoading(false)
       }
@@ -58,7 +51,7 @@ function ChatPage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [navigate])
 
   const activeChat = useMemo(
     () => chats.find((chat) => chat.id === activeChatId),
@@ -70,55 +63,9 @@ function ChatPage() {
     [messages, activeChatId],
   )
 
-  const handleAuthChange = (event) => {
-    const { name, value } = event.target
-    setAuthForm((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleAuthSubmit = async (event) => {
-    event.preventDefault()
-
-    try {
-      setAuthLoading(true)
-      setError('')
-
-      const payload = {
-        email: authForm.email.trim(),
-        password: authForm.password,
-      }
-
-      let response
-      if (authMode === 'register') {
-        response = await api.register({ ...payload, name: authForm.name.trim() })
-      } else {
-        response = await api.login(payload)
-      }
-
-      setAuthToken(response.token)
-      setUser(response.user)
-
-      const allChats = await api.getChats()
-      const allMessages = await api.getMessages()
-
-      setChats(allChats)
-      setMessages(allMessages)
-      setActiveChatId(allChats[0]?.id ?? null)
-      setAuthForm(initialAuthState)
-    } catch (err) {
-      setError(err.message || 'Authentication failed')
-    } finally {
-      setAuthLoading(false)
-    }
-  }
-
   const handleLogout = () => {
     clearAuthToken()
-    setUser(null)
-    setChats([])
-    setMessages([])
-    setActiveChatId(null)
-    setInput('')
-    setError('')
+    navigate('/login', { replace: true })
   }
 
   const handleSubmit = async (event) => {
@@ -155,67 +102,6 @@ function ChatPage() {
     } catch (err) {
       setError(err.message || 'Failed to create chat')
     }
-  }
-
-  if (!user && !loading) {
-    return (
-      <div className="auth-shell">
-        <form className="auth-card" onSubmit={handleAuthSubmit}>
-          <h1>Chat Bot</h1>
-          <p>{authMode === 'register' ? 'Create your account' : 'Sign in to continue'}</p>
-
-          {authMode === 'register' ? (
-            <label>
-              Name
-              <input
-                name="name"
-                type="text"
-                value={authForm.name}
-                onChange={handleAuthChange}
-                required
-              />
-            </label>
-          ) : null}
-
-          <label>
-            Email
-            <input
-              name="email"
-              type="email"
-              value={authForm.email}
-              onChange={handleAuthChange}
-              required
-            />
-          </label>
-
-          <label>
-            Password
-            <input
-              name="password"
-              type="password"
-              value={authForm.password}
-              onChange={handleAuthChange}
-              required
-              minLength={8}
-            />
-          </label>
-
-          <button type="submit" disabled={authLoading}>
-            {authLoading ? 'Please wait...' : authMode === 'register' ? 'Create account' : 'Sign in'}
-          </button>
-
-          <button
-            type="button"
-            className="link-button"
-            onClick={() => setAuthMode((prev) => (prev === 'login' ? 'register' : 'login'))}
-          >
-            {authMode === 'login' ? 'Need an account? Register' : 'Already have an account? Sign in'}
-          </button>
-
-          {error ? <div className="auth-error">{error}</div> : null}
-        </form>
-      </div>
-    )
   }
 
   return (
