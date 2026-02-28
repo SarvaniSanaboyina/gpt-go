@@ -8,6 +8,20 @@
       "when": 1772203248436,
       "tag": "0000_flashy_ogun",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1772256053846,
+      "tag": "0001_bored_microchip",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772259283723,
+      "tag": "0002_old_radioactive_man",
+      "breakpoints": true
     }
   ]
 }
