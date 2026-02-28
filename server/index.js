@@ -1,4 +1,7 @@
+require("dotenv").config();
 const express = require("express");
+const { db } = require("./db/client");
+const { users } = require("./db/schema");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -11,6 +14,15 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
+});
+
+app.get("/users", async (req, res) => {
+  try {
+    const data = await db.select().from(users);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch users" });
+  }
 });
 
 app.listen(PORT, () => {
