@@ -1,106 +1,118 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '../lib/api'
 import './ChatPage.css'
 
-const initialChats = [
-  { chat_id: 'chat-1', title: 'New Feature Planning' },
-  { chat_id: 'chat-2', title: 'API Integration Notes' },
-  { chat_id: 'chat-3', title: 'Bug triage for checkout' },
-  { chat_id: 'chat-4', title: 'Marketing copy ideas' },
-  { chat_id: 'chat-5', title: 'System design prep' },
-]
-
-const initialMessages = [
-  {
-    chat_id: 'chat-1',
-    role: 'assistant',
-    content:
-      'Hello. I can help draft architecture, code, or product copy. What do you want to work on today?',
-  },
-  {
-    chat_id: 'chat-1',
-    role: 'user',
-    content: 'Set up a route with a component that resembles the ChatGPT chat page.',
-  },
-  {
-    chat_id: 'chat-1',
-    role: 'assistant',
-    content:
-      'Done. I added a chat route and built a split layout with sidebar, thread history, and a composer area.',
-  },
-  {
-    chat_id: 'chat-2',
-    role: 'assistant',
-    content: 'I can help outline the API contract. Do you want REST or GraphQL for this service?',
-  },
-  {
-    chat_id: 'chat-2',
-    role: 'user',
-    content: 'REST first. Please suggest endpoints for auth and chat history.',
-  },
-  {
-    chat_id: 'chat-3',
-    role: 'assistant',
-    content: 'Checkout bug triage loaded. Share the top reproducible issue and logs.',
-  },
-  {
-    chat_id: 'chat-4',
-    role: 'assistant',
-    content: 'For the launch copy, who is the target audience and primary use case?',
-  },
-  {
-    chat_id: 'chat-5',
-    role: 'assistant',
-    content: 'System design prep ready. We can do requirements, capacity, then architecture.',
-  },
-]
-
 function ChatPage() {
-  const [chats, setChats] = useState(initialChats)
-  const [activeChatId, setActiveChatId] = useState(initialChats[0].chat_id)
-  const [messages, setMessages] = useState(initialMessages)
+  const [currentUserId, setCurrentUserId] = useState(null)
+  const [chats, setChats] = useState([])
+  const [messages, setMessages] = useState([])
+  const [activeChatId, setActiveChatId] = useState(null)
   const [input, setInput] = useState('')
-  const activeChat = chats.find((chat) => chat.chat_id === activeChatId)
-  const activeMessages = messages.filter((message) => message.chat_id === activeChatId)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const handleSubmit = (event) => {
-    event.preventDefault()
-    const trimmed = input.trim()
-    if (!trimmed) return
+  useEffect(() => {
+    let isMounted = true
 
-    setMessages((prev) => [...prev, { chat_id: activeChatId, role: 'user', content: trimmed }])
-    setInput('')
-  }
+    async function bootstrap() {
+      try {
+        setLoading(true)
+        setError('')
 
-  const handleNewChat = () => {
-    const chatId = `chat-${Date.now()}`
-    const newChat = {
-      chat_id: chatId,
-      title: `New chat ${chats.length + 1}`,
+        let users = await api.getUsers()
+        if (users.length === 0) {
+          const createdUser = await api.createUser({
+            name: 'Demo User',
+            email: `demo-${Date.now()}@example.com`,
+          })
+          users = [createdUser]
+        }
+
+        const userId = users[0].id
+        const allChats = await api.getChats()
+        const userChats = allChats.filter((chat) => chat.userId === userId)
+        const allMessages = await api.getMessages()
+
+        if (!isMounted) return
+
+        setCurrentUserId(userId)
+        setChats(userChats)
+        setMessages(allMessages)
+        setActiveChatId(userChats[0]?.id ?? null)
+      } catch (err) {
+        if (!isMounted) return
+        setError(err.message || 'Failed to load data')
+      } finally {
+        if (isMounted) setLoading(false)
+      }
     }
 
-    setChats((prev) => [newChat, ...prev])
-    setMessages((prev) => [
-      ...prev,
-      {
-        chat_id: chatId,
-        role: 'assistant',
-        content: 'New chat created. What would you like to work on?',
-      },
-    ])
-    setActiveChatId(chatId)
-    setInput('')
+    bootstrap()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  const activeChat = useMemo(
+    () => chats.find((chat) => chat.id === activeChatId),
+    [chats, activeChatId],
+  )
+
+  const activeMessages = useMemo(
+    () => messages.filter((message) => message.chatId === activeChatId),
+    [messages, activeChatId],
+  )
+
+  const handleSubmit = async (event) => {
+    event.preventDefault()
+    const trimmed = input.trim()
+    if (!trimmed || !activeChatId) return
+
+    try {
+      setError('')
+      const created = await api.createMessage({
+        chatId: activeChatId,
+        role: 'user',
+        content: trimmed,
+      })
+      setMessages((prev) => [...prev, created])
+      setInput('')
+    } catch (err) {
+      setError(err.message || 'Failed to send message')
+    }
+  }
+
+  const handleNewChat = async () => {
+    if (!currentUserId) return
+
+    try {
+      setError('')
+      const createdChat = await api.createChat({
+        userId: currentUserId,
+        title: `New chat ${chats.length + 1}`,
+      })
+
+      setChats((prev) => [createdChat, ...prev])
+      setActiveChatId(createdChat.id)
+      setInput('')
+    } catch (err) {
+      setError(err.message || 'Failed to create chat')
+    }
   }
 
   return (
     <div className="chat-shell">
       <aside className="chat-sidebar">
-        <button className="new-chat" onClick={handleNewChat}>+ New chat</button>
+        <button className="new-chat" onClick={handleNewChat} disabled={loading || !currentUserId}>
+          + New chat
+        </button>
         <nav className="chat-list" aria-label="Chat history">
           {chats.map((chat) => (
             <button
-              className={`chat-item ${chat.chat_id === activeChatId ? 'active' : ''}`}
-              key={chat.chat_id}
-              onClick={() => setActiveChatId(chat.chat_id)}
+              className={`chat-item ${chat.id === activeChatId ? 'active' : ''}`}
+              key={chat.id}
+              onClick={() => setActiveChatId(chat.id)}
             >
               {chat.title}
             </button>
@@ -111,31 +123,47 @@ function ChatPage() {
 
       <section className="chat-main" aria-label="Conversation">
         <header className="chat-header">
-          <span>{activeChat?.title ?? 'ChatGPT Style Demo'}</span>
-          <button className="header-action">Share</button>
+          <span>{activeChat?.title ?? 'Select or create a chat'}</span>
+          <button className="header-action" disabled>
+            Share
+          </button>
         </header>
 
-        <div className="chat-thread">
-          {activeMessages.map((message, index) => (
-            <article className={`message message-${message.role}`} key={`${message.role}-${index}`}>
-              <div className="avatar">{message.role === 'assistant' ? 'AI' : 'You'}</div>
-              <p>{message.content}</p>
-            </article>
-          ))}
-        </div>
+        {loading ? <div className="chat-thread">Loading...</div> : null}
+        {!loading && error ? <div className="chat-thread">Error: {error}</div> : null}
+
+        {!loading && !error ? (
+          <div className="chat-thread">
+            {activeMessages.length === 0 ? (
+              <article className="message message-assistant">
+                <div className="avatar">AI</div>
+                <p>No messages yet. Start the conversation.</p>
+              </article>
+            ) : null}
+            {activeMessages.map((message) => (
+              <article className={`message message-${message.role}`} key={message.id}>
+                <div className="avatar">{message.role === 'assistant' ? 'AI' : 'You'}</div>
+                <p>{message.content}</p>
+              </article>
+            ))}
+          </div>
+        ) : null}
 
         <footer className="chat-composer-wrap">
           <form className="chat-composer" onSubmit={handleSubmit}>
             <input
               type="text"
-              placeholder="Message ChatGPT"
+              placeholder="Message"
               aria-label="Message input"
               value={input}
               onChange={(event) => setInput(event.target.value)}
+              disabled={!activeChatId || loading}
             />
-            <button type="submit">Send</button>
+            <button type="submit" disabled={!activeChatId || loading}>
+              Send
+            </button>
           </form>
-          <small>Demo UI only. Hook this up to your backend/API next.</small>
+          <small>Connected to Express + Drizzle API.</small>
         </footer>
       </section>
     </div>
