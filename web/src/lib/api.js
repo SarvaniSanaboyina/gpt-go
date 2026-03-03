@@ -46,4 +46,5 @@ export const api = {
   createChat: (payload) => request({ method: 'post', url: '/chats', data: payload }),
   getMessages: () => request({ method: 'get', url: '/messages' }),
   createMessage: (payload) => request({ method: 'post', url: '/messages', data: payload }),
+  respondToMessage: (payload) => request({ method: 'post', url: '/messages/respond', data: payload }),
 }

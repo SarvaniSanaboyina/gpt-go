@@ -75,12 +75,15 @@ function ChatPage() {
 
     try {
       setError('')
-      const created = await api.createMessage({
+      const response = await api.respondToMessage({
         chatId: activeChatId,
-        role: 'user',
         content: trimmed,
       })
-      setMessages((prev) => [...prev, created])
+      setMessages((prev) => [
+        ...prev,
+        ...(response?.userMessage ? [response.userMessage] : []),
+        ...(response?.assistantMessage ? [response.assistantMessage] : []),
+      ])
       setInput('')
     } catch (err) {
       setError(err.message || 'Failed to send message')

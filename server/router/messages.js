@@ -1,8 +1,9 @@
 const express = require("express");
-const { and, eq, inArray } = require("drizzle-orm");
+const { and, asc, eq, inArray } = require("drizzle-orm");
 const { db } = require("../db/client");
 const { messages, chats } = require("../db/schema");
 const { requireAuth } = require("../auth/middleware");
+const { generateAssistantReply } = require("../ai/agent");
 
 const router = express.Router();
 router.use(requireAuth);
@@ -76,6 +77,50 @@ router.post("/messages", async (req, res) => {
     return res.status(201).json(data[0]);
   } catch (error) {
     return res.status(500).json({ error: "Failed to create message" });
+  }
+});
+
+router.post("/messages/respond", async (req, res) => {
+  const { chatId, content } = req.body;
+  const trimmedContent = typeof content === "string" ? content.trim() : "";
+  if (!chatId || !trimmedContent) {
+    return res.status(400).json({ error: "chatId and content are required" });
+  }
+
+  try {
+    const canAccess = await hasChatAccess(chatId, req.auth.userId);
+    if (!canAccess) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+
+    const createdUserMessage = await db
+      .insert(messages)
+      .values({ chatId, role: "user", content: trimmedContent })
+      .returning();
+
+    const chatMessages = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.chatId, chatId))
+      .orderBy(asc(messages.id));
+
+    const aiMessages = chatMessages
+      .filter((message) => message.role === "user" || message.role === "assistant")
+      .map((message) => ({ role: message.role, content: message.content }));
+
+    const aiResult = await generateAssistantReply(aiMessages);
+    const createdAssistantMessage = await db
+      .insert(messages)
+      .values({ chatId, role: "assistant", content: aiResult.text })
+      .returning();
+
+    return res.status(201).json({
+      userMessage: createdUserMessage[0],
+      assistantMessage: createdAssistantMessage[0],
+      model: aiResult.model,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message || "Failed to generate assistant response" });
   }
 });
 

@@ -13,6 +13,7 @@
     "db:seed": "node scripts/seed.js"
   },
   "dependencies": {
+    "ai": "^6.0.108",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.44.5",
     "express": "^4.21.2",
