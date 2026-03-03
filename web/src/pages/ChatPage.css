@@ -7,12 +7,16 @@
 }
 
 .chat-sidebar {
+  position: sticky;
+  top: 0;
   background: #202123;
   border-right: 1px solid #2d2f3a;
   padding: 1rem 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .new-chat {
@@ -28,6 +32,8 @@
 .chat-list {
   display: grid;
   gap: 0.45rem;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .chat-item {
