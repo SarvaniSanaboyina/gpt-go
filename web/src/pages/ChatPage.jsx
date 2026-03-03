@@ -12,6 +12,7 @@ function ChatPage() {
   const [activeChatId, setActiveChatId] = useState(null)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
+  const [respondingChatId, setRespondingChatId] = useState(null)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -71,10 +72,11 @@ function ChatPage() {
   const handleSubmit = async (event) => {
     event.preventDefault()
     const trimmed = input.trim()
-    if (!trimmed || !activeChatId) return
+    if (!trimmed || !activeChatId || respondingChatId !== null) return
 
     try {
       setError('')
+      setRespondingChatId(activeChatId)
       const response = await api.respondToMessage({
         chatId: activeChatId,
         content: trimmed,
@@ -87,6 +89,8 @@ function ChatPage() {
       setInput('')
     } catch (err) {
       setError(err.message || 'Failed to send message')
+    } finally {
+      setRespondingChatId(null)
     }
   }
 
@@ -157,6 +161,16 @@ function ChatPage() {
                 <p>{message.content}</p>
               </article>
             ))}
+            {respondingChatId === activeChatId ? (
+              <article className="message message-assistant message-loader" aria-live="polite">
+                <div className="avatar">AI</div>
+                <p className="typing-indicator" aria-label="AI is responding">
+                  <span />
+                  <span />
+                  <span />
+                </p>
+              </article>
+            ) : null}
           </div>
         ) : null}
 
@@ -168,9 +182,9 @@ function ChatPage() {
               aria-label="Message input"
               value={input}
               onChange={(event) => setInput(event.target.value)}
-              disabled={!activeChatId || loading}
+              disabled={!activeChatId || loading || respondingChatId !== null}
             />
-            <button type="submit" disabled={!activeChatId || loading}>
+            <button type="submit" disabled={!activeChatId || loading || respondingChatId !== null}>
               Send
             </button>
           </form>
