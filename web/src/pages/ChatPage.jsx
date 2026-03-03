@@ -76,6 +76,7 @@ function ChatPage() {
 
     try {
       setError('')
+      setInput('')
       setRespondingChatId(activeChatId)
       const response = await api.respondToMessage({
         chatId: activeChatId,
@@ -86,12 +87,17 @@ function ChatPage() {
         ...(response?.userMessage ? [response.userMessage] : []),
         ...(response?.assistantMessage ? [response.assistantMessage] : []),
       ])
-      setInput('')
     } catch (err) {
       setError(err.message || 'Failed to send message')
     } finally {
       setRespondingChatId(null)
     }
+  }
+
+  const handleInputKeyDown = (event) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    event.currentTarget.form?.requestSubmit()
   }
 
   const handleNewChat = async () => {
@@ -182,6 +188,7 @@ function ChatPage() {
               aria-label="Message input"
               value={input}
               onChange={(event) => setInput(event.target.value)}
+              onKeyDown={handleInputKeyDown}
               disabled={!activeChatId || loading || respondingChatId !== null}
             />
             <button type="submit" disabled={!activeChatId || loading || respondingChatId !== null}>
