@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { api } from '../lib/api'
 import { clearAuthToken, getAuthToken } from '../lib/auth'
 import './ChatPage.css'
@@ -164,7 +166,32 @@ function ChatPage() {
             {activeMessages.map((message) => (
               <article className={`message message-${message.role}`} key={message.id}>
                 <div className="avatar">{message.role === 'assistant' ? 'AI' : 'You'}</div>
-                <p>{message.content}</p>
+                <div className="message-content">
+                  {message.role === 'assistant' ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({ children }) => <p className="message-paragraph">{children}</p>,
+                        ul: ({ children }) => <ul className="message-list">{children}</ul>,
+                        ol: ({ children }) => <ol className="message-list">{children}</ol>,
+                        pre: ({ children }) => <pre className="message-code-block">{children}</pre>,
+                        code: ({ className, children, ...props }) => {
+                          const language = className?.replace('language-', '')
+                          return (
+                            <code className={className} {...props}>
+                              {language ? <span className="message-code-lang">{language}</span> : null}
+                              {children}
+                            </code>
+                          )
+                        },
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="message-paragraph">{message.content}</p>
+                  )}
+                </div>
               </article>
             ))}
             {respondingChatId === activeChatId ? (
